@@ -1,0 +1,11 @@
+name: load_testing_project
+description: A project for load testing
+dependencies:
+  http: any
+  json_serializable: any
+dev_dependencies:
+  build_runner: any
+  test: ^1.26.3
+
+environment:
+  sdk: ^3.9.2
