@@ -67,7 +67,10 @@ bool isProbablePrime(BigInt n, {int k = 40}) {
     bool cont = false;
     for (int j = 1; j < r; j++) {
       x = modPow(x, BigInt.two, n);
-      if (x == n - BigInt.one) { cont = true; break; }
+      if (x == n - BigInt.one) {
+        cont = true;
+        break;
+      }
     }
     if (cont) continue;
     return false;
@@ -82,7 +85,7 @@ BigInt generatePrime(int bitLength) {
   }
 }
 
-// 
+//
 RSAKeyPair generateRSAKeyPair(int bitLength) {
   final e = BigInt.from(65537);
   BigInt p, q, phi, d, n;
