@@ -4,12 +4,14 @@ import 'dart:convert';
 
 void main() {
   group('RSA 32768-bit Tests', () {
-    test('Generate 32768-bit RSA key pair', () {
-      final bitLength = 32768;
-      print('Generating 32768-bit RSA key pair...');
-      final keyPair = generateRSAKeyPair(bitLength);
+    test('Generate 32768-bit RSA key pair from files', () async {
+      print('Загрузка 32768-битных простых чисел из файлов...');
+      final keyPair = await generateRSAKeyPairFromFiles(
+        'core/rsa/prime1.txt',
+        'core/rsa/prime2.txt',
+      );
 
-      print('Key generation done.');
+      print('Генерация ключей завершена.');
       print('n bit length: ${keyPair.n.bitLength}');
       print('e: ${keyPair.e}');
       print('d bit length: ${keyPair.d.bitLength}');
@@ -26,7 +28,7 @@ void main() {
 
       // Шифруем
       final cipher = encrypt(messageInt, keyPair);
-      print('Encrypted: ${cipher.toString().substring(0, 60)}...'); // первые 60 символов
+      print('Encrypted: ${cipher.toString().substring(0, 60)}...');
 
       // Дешифруем
       final decryptedInt = decrypt(cipher, keyPair);
