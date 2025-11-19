@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../models/user.dart';
 import '../models/encrypted_text.dart';
@@ -7,6 +8,7 @@ import '../services/database_service.dart';
 import '../core/Kuznyechik/kuznechik.dart';
 import '../core/rsa/rsa.dart';
 import '../core/streebog/streebog.dart';
+import '../core/crypto_isolate.dart';
 
 enum Algorithm { rsa, kuznechik, streebog }
 
@@ -31,6 +33,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
   Kuznechik? kuznechik;
   bool _isInitializing = true;
   String? _initializationError;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -63,160 +66,132 @@ class _CryptoScreenState extends State<CryptoScreen> {
     }
   }
 
-  Uint8List _addPKCS7Padding(Uint8List data, int blockSize) {
-    int paddingLength = blockSize - (data.length % blockSize);
-    Uint8List padding = Uint8List(paddingLength)
-      ..fillRange(0, paddingLength, paddingLength);
-    return Uint8List.fromList([...data, ...padding]);
-  }
 
-  Uint8List _removePKCS7Padding(Uint8List data) {
-    if (data.isEmpty) return data;
-    int paddingLength = data.last;
-    if (paddingLength > data.length || paddingLength == 0) return data;
-    return data.sublist(0, data.length - paddingLength);
-  }
-
-  String _bytesToHex(Uint8List bytes) {
-    return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
-  }
-
-  String _encryptRSA(String text) {
-    try {
-      if (rsaKeyPair == null) {
-        return 'Ошибка шифрования: RSA ключи не инициализированы';
-      }
-      List<int> bytes = utf8.encode(text);
-      BigInt message = BigInt.parse(
-        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
-        radix: 16,
-      );
-      BigInt encrypted = encrypt(message, rsaKeyPair!);
-      return encrypted.toRadixString(16);
-    } catch (e) {
-      return 'Ошибка шифрования: $e';
-    }
-  }
-
-  String _decryptRSA(String hexText) {
-    try {
-      if (rsaKeyPair == null) {
-        return 'Ошибка дешифрования: RSA ключи не инициализированы';
-      }
-      BigInt encrypted = BigInt.parse(hexText, radix: 16);
-      BigInt decrypted = decrypt(encrypted, rsaKeyPair!);
-      List<int> bytes = [];
-      String hex = decrypted
-          .toRadixString(16)
-          .padLeft((decrypted.bitLength + 7) ~/ 8 * 2, '0');
-      for (int i = 0; i < hex.length; i += 2) {
-        bytes.add(int.parse(hex.substring(i, i + 2), radix: 16));
-      }
-      return utf8.decode(bytes, allowMalformed: true);
-    } catch (e) {
-      return 'Ошибка дешифрования: $e';
-    }
-  }
-
-  String _encryptKuznechik(String text) {
-    try {
-      if (kuznechik == null) {
-        return 'Ошибка шифрования: Kuznechik не инициализирован';
-      }
-      Uint8List data = utf8.encode(text);
-      Uint8List padded = _addPKCS7Padding(data, 16);
-      List<Uint8List> blocks = [];
-      for (int i = 0; i < padded.length; i += 16) {
-        blocks.add(padded.sublist(i, i + 16));
-      }
-      List<Uint8List> encryptedBlocks = blocks
-          .map((b) => kuznechik!.encryptBlock(b))
-          .toList();
-      Uint8List result = Uint8List.fromList(
-        encryptedBlocks.expand((b) => b).toList(),
-      );
-      return _bytesToHex(result);
-    } catch (e) {
-      return 'Ошибка шифрования: $e';
-    }
-  }
-
-  String _decryptKuznechik(String hexText) {
-    try {
-      if (kuznechik == null) {
-        return 'Ошибка дешифрования: Kuznechik не инициализирован';
-      }
-      List<int> bytes = [];
-      for (int i = 0; i < hexText.length; i += 2) {
-        bytes.add(int.parse(hexText.substring(i, i + 2), radix: 16));
-      }
-      Uint8List data = Uint8List.fromList(bytes);
-      List<Uint8List> blocks = [];
-      for (int i = 0; i < data.length; i += 16) {
-        blocks.add(data.sublist(i, i + 16));
-      }
-      List<Uint8List> decryptedBlocks = blocks
-          .map((b) => kuznechik!.decryptBlock(b))
-          .toList();
-      Uint8List padded = Uint8List.fromList(
-        decryptedBlocks.expand((b) => b).toList(),
-      );
-      Uint8List result = _removePKCS7Padding(padded);
-      return utf8.decode(result);
-    } catch (e) {
-      return 'Ошибка дешифрования: $e';
-    }
-  }
-
-  String _hashStreebog(String text) {
-    try {
-      Uint8List data = utf8.encode(text);
-      Streebog streebog = Streebog();
-      streebog.update(data);
-      Uint8List hash = streebog.digest();
-      return _bytesToHex(hash);
-    } catch (e) {
-      return 'Ошибка хэширования: $e';
-    }
-  }
 
   void _encrypt() async {
-    String text = plaintextController.text;
-    String result;
-    if (selectedAlgorithm == Algorithm.rsa) {
-      result = _encryptRSA(text);
-    } else if (selectedAlgorithm == Algorithm.kuznechik) {
-      result = _encryptKuznechik(text);
-    } else {
-      result = _hashStreebog(text);
-      hashController.text = result;
-      return;
-    }
-    ciphertextController.text = result;
+    if (_isProcessing) return;
+    
+    final text = plaintextController.text;
+    if (text.isEmpty) return;
 
-    // Сохраняем зашифрованный текст
-    final encryptedText = EncryptedText(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      username: widget.user.username,
-      originalText: text,
-      encryptedText: result,
-      algorithm: selectedAlgorithm.toString().split('.').last,
-      createdAt: DateTime.now(),
-    );
-    await _databaseService.saveEncryptedText(encryptedText);
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      String result;
+      
+      if (selectedAlgorithm == Algorithm.rsa) {
+        if (rsaKeyPair == null) {
+          result = 'Ошибка шифрования: RSA ключи не инициализированы';
+        } else {
+          final data = RSAEncryptData(
+            text,
+            rsaKeyPair!.n.toRadixString(16),
+            rsaKeyPair!.e.toRadixString(16),
+          );
+          result = await compute(encryptRSAIsolate, data);
+        }
+      } else if (selectedAlgorithm == Algorithm.kuznechik) {
+        if (kuznechik == null) {
+          result = 'Ошибка шифрования: Kuznechik не инициализирован';
+        } else {
+          final keyBytes = List.generate(32, (i) => i % 256);
+          final data = KuznechikEncryptData(text, keyBytes);
+          result = await compute(encryptKuznechikIsolate, data);
+        }
+      } else {
+        // Streebog
+        result = await compute(hashStreebogIsolate, text);
+        if (mounted) {
+          hashController.text = result;
+        }
+        setState(() {
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      if (mounted) {
+        ciphertextController.text = result;
+
+        // Сохраняем зашифрованный текст
+        final encryptedText = EncryptedText(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          username: widget.user.username,
+          originalText: text,
+          encryptedText: result,
+          algorithm: selectedAlgorithm.toString().split('.').last,
+          createdAt: DateTime.now(),
+        );
+        await _databaseService.saveEncryptedText(encryptedText);
+      }
+    } catch (e) {
+      if (mounted) {
+        ciphertextController.text = 'Ошибка: $e';
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
   }
 
-  void _decrypt() {
-    String text = ciphertextController.text;
-    String result;
-    if (selectedAlgorithm == Algorithm.rsa) {
-      result = _decryptRSA(text);
-    } else if (selectedAlgorithm == Algorithm.kuznechik) {
-      result = _decryptKuznechik(text);
-    } else {
-      return;
+  void _decrypt() async {
+    if (_isProcessing) return;
+    
+    final text = ciphertextController.text;
+    if (text.isEmpty) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      String result;
+      
+      if (selectedAlgorithm == Algorithm.rsa) {
+        if (rsaKeyPair == null) {
+          result = 'Ошибка дешифрования: RSA ключи не инициализированы';
+        } else {
+          final data = RSADecryptData(
+            text,
+            rsaKeyPair!.n.toRadixString(16),
+            rsaKeyPair!.d.toRadixString(16),
+          );
+          result = await compute(decryptRSAIsolate, data);
+        }
+      } else if (selectedAlgorithm == Algorithm.kuznechik) {
+        if (kuznechik == null) {
+          result = 'Ошибка дешифрования: Kuznechik не инициализирован';
+        } else {
+          final keyBytes = List.generate(32, (i) => i % 256);
+          final data = KuznechikDecryptData(text, keyBytes);
+          result = await compute(decryptKuznechikIsolate, data);
+        }
+      } else {
+        setState(() {
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      if (mounted) {
+        plaintextController.text = result;
+      }
+    } catch (e) {
+      if (mounted) {
+        plaintextController.text = 'Ошибка: $e';
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
-    plaintextController.text = result;
   }
 
   void _copyToClipboard(String text) {
@@ -341,14 +316,30 @@ class _CryptoScreenState extends State<CryptoScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  ElevatedButton(
-                    onPressed: _encrypt,
-                    child: const Text('Зашифровать'),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isProcessing ? null : _encrypt,
+                      child: _isProcessing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Зашифровать'),
+                    ),
                   ),
                   const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: _decrypt,
-                    child: const Text('Дешифровать'),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isProcessing ? null : _decrypt,
+                      child: _isProcessing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Дешифровать'),
+                    ),
                   ),
                 ],
               ),
@@ -389,8 +380,14 @@ class _CryptoScreenState extends State<CryptoScreen> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _encrypt,
-                child: const Text('Хэшировать'),
+                onPressed: _isProcessing ? null : _encrypt,
+                child: _isProcessing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Хэшировать'),
               ),
             ],
             const Spacer(),
