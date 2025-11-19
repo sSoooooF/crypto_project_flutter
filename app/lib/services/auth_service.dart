@@ -70,57 +70,45 @@ class AuthService {
     return isValidCurrent || isValidPrevious || isValidNext;
   }
 
+  /// Authenticate user with three factors:
+  /// 1. Username and password
+  /// 2. TOTP code (if user has TOTP enabled)
+  /// 3. Biometric (fingerprint) - handled separately in UI
   Future<User?> authenticate(
     String username,
     String password,
     String? totpCode,
   ) async {
-    // Если введен пароль, проверяем пароль и TOTP
-    if (password.isNotEmpty) {
-      // Хэшируем пароль
-      Streebog streebog = Streebog();
-      streebog.update(utf8.encode(password));
-      List<int> digest = streebog.digest();
-      String passwordHash = digest
-          .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-          .join();
-
-      // Проверяем пароль
-      User? user = await _databaseService.authenticate(username, passwordHash);
-      if (user == null) return null;
-
-      // Если у пользователя есть TOTP секрет, проверяем код
-      if (user.totpSecret != null && totpCode != null) {
-        if (!verifyTotpCode(user.totpSecret!, totpCode, username: username)) {
-          return null;
-        }
-      }
-
-      return user;
-    }
-    // Если пароль не введен, но введен TOTP код, проверяем только TOTP
-    else if (totpCode != null && totpCode.isNotEmpty) {
-      // Ищем пользователя по имени
-      final users = await _databaseService.getUsers();
-      User? user;
-      try {
-        user = users.firstWhere((u) => u.username == username);
-      } catch (e) {
-        return null;
-      }
-
-      // Если у пользователя есть TOTP секрет, проверяем код
-      if (user.totpSecret != null) {
-        if (!verifyTotpCode(user.totpSecret!, totpCode)) {
-          return null;
-        }
-        return user;
-      }
-
+    if (password.isEmpty) {
       return null;
     }
 
-    return null;
+    // Step 1: Verify username and password
+    Streebog streebog = Streebog();
+    streebog.update(utf8.encode(password));
+    List<int> digest = streebog.digest();
+    String passwordHash = digest
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+
+    User? user = await _databaseService.authenticate(username, passwordHash);
+    if (user == null) return null;
+
+    // Step 2: Verify TOTP code (if user has TOTP enabled)
+    if (user.totpSecret != null) {
+      if (totpCode == null || totpCode.isEmpty) {
+        // TOTP is required but not provided
+        return null;
+      }
+      if (!verifyTotpCode(user.totpSecret!, totpCode, username: username)) {
+        return null;
+      }
+    }
+
+    // Step 3: Biometric verification is handled in the UI
+    // This method returns the user if password and TOTP are valid
+    // The UI will then prompt for biometric if user.hasBiometricEnabled is true
+    return user;
   }
 
   Future<User> registerUser(
@@ -161,13 +149,15 @@ class AuthService {
     String username,
     String passwordHash,
     Role role,
-    String totpSecret,
-  ) async {
+    String totpSecret, {
+    bool hasBiometricEnabled = false,
+  }) async {
     await _databaseService.registerUser(
       username,
       passwordHash,
       role,
       totpSecret: totpSecret,
+      hasBiometricEnabled: hasBiometricEnabled,
     );
 
     // Возвращаем пользователя
@@ -177,8 +167,13 @@ class AuthService {
       role: role,
       createdAt: DateTime.now(),
       totpSecret: totpSecret,
+      hasBiometricEnabled: hasBiometricEnabled,
     );
     return user;
+  }
+
+  Future<void> updateUserBiometricStatus(String username, bool hasBiometricEnabled) async {
+    await _databaseService.updateUserBiometricStatus(username, hasBiometricEnabled);
   }
 
   Future<User?> authenticateGuest() async {

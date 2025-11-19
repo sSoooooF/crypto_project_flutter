@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import '../models/user.dart';
 import '../core/streebog/streebog.dart';
 import 'home_screen.dart';
@@ -20,12 +21,15 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController onetimeController = TextEditingController();
   final AuthService _authService = AuthService();
+  final BiometricService _biometricService = BiometricService();
 
   bool _isRegistering = false;
   bool _showQrCode = false;
   String? _qrCodeUrl;
   String? _totpSecret;
   String? _registrationMessage;
+  String? _pendingUsername;
+  String? _pendingPasswordHash;
 
   @override
   void dispose() {
@@ -40,35 +44,71 @@ class _AuthScreenState extends State<AuthScreen> {
     String password = passwordController.text;
     String onetimeCode = onetimeController.text;
 
-    User? user = null;
-
-    // 1. Парольная аутентификация и TOTP
-    if (password.isNotEmpty) {
-      user = await _authService.authenticate(
-        username,
-        password,
-        onetimeCode.isNotEmpty ? onetimeCode : null,
-      );
+    // Guest login (if nothing entered)
+    if (username.isEmpty && password.isEmpty && onetimeCode.isEmpty) {
+      User? guest = await _authService.authenticateGuest();
+      if (guest != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen(user: guest)),
+        );
+        return;
+      }
     }
 
-    // 2. Гость (если ничего не введено и не удалось аутентифицироваться)
-    if (user == null &&
-        username.isEmpty &&
-        password.isEmpty &&
-        onetimeCode.isEmpty) {
-      user = await _authService.authenticateGuest();
-    }
-
-    if (user != null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen(user: user!)),
-      );
-    } else {
+    if (password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Неверные данные аутентификации')),
+        const SnackBar(content: Text('Введите пароль')),
       );
+      return;
     }
+
+    // Step 1: Verify username and password
+    User? user = await _authService.authenticate(
+      username,
+      password,
+      onetimeCode.isNotEmpty ? onetimeCode : null,
+    );
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Неверный логин, пароль или код TOTP')),
+      );
+      return;
+    }
+
+    // Step 2: TOTP verification is already done in authenticate()
+    // If user has TOTP but code is missing/invalid, authenticate() returns null
+
+    // Step 3: Verify fingerprint/biometric (if enabled)
+    if (user.hasBiometricEnabled) {
+      final bool isBiometricAvailable = await _biometricService.isAvailable();
+      if (!isBiometricAvailable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Биометрическая аутентификация недоступна на этом устройстве'),
+          ),
+        );
+        return;
+      }
+
+      final bool biometricSuccess = await _biometricService.authenticate(
+        reason: 'Подтвердите свою личность для входа в аккаунт ${user.username}',
+      );
+
+      if (!biometricSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Биометрическая аутентификация не пройдена')),
+        );
+        return;
+      }
+    }
+
+    // All authentication factors passed
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => HomeScreen(user: user)),
+    );
   }
 
   void _register() async {
@@ -91,16 +131,22 @@ class _AuthScreenState extends State<AuthScreen> {
         .join();
 
     try {
-      // Генерируем TOTP секрет и сохраняем того же пользователя
+      // Генерируем TOTP секрет
       final generatedSecret = _authService.generateTotpSecret();
-      User newUser = await _authService.registerUserWithTotp(
+      
+      // Сохраняем пользователя сначала без биометрии
+      await _authService.registerUserWithTotp(
         username,
         passwordHash,
         Role.user,
         generatedSecret,
+        hasBiometricEnabled: false,
       );
-
+      
+      // Сохраняем данные для последующего обновления после биометрии
       setState(() {
+        _pendingUsername = username;
+        _pendingPasswordHash = passwordHash;
         _totpSecret = generatedSecret;
         _isRegistering = true;
         _showQrCode = true;
@@ -117,6 +163,53 @@ class _AuthScreenState extends State<AuthScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Ошибка регистрации: $e')));
+    }
+  }
+
+  Future<void> _enrollBiometric() async {
+    if (_pendingUsername == null || _pendingPasswordHash == null || _totpSecret == null) {
+      return;
+    }
+
+    // Check if biometric is available
+    final bool isAvailable = await _biometricService.isAvailable();
+    if (!isAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Биометрическая аутентификация недоступна на этом устройстве'),
+        ),
+      );
+      return;
+    }
+
+    // Prompt for fingerprint enrollment
+    final bool success = await _biometricService.authenticate(
+      reason: 'Зарегистрируйте отпечаток пальца для аккаунта $_pendingUsername',
+    );
+
+    if (success) {
+      try {
+        // Update user's biometric status
+        await _authService.updateUserBiometricStatus(_pendingUsername!, true);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Отпечаток пальца успешно зарегистрирован!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Reset registration state
+        _resetRegistration();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка сохранения: $e')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Регистрация отпечатка отменена')),
+      );
     }
   }
 
@@ -141,6 +234,8 @@ class _AuthScreenState extends State<AuthScreen> {
       _qrCodeUrl = null;
       _totpSecret = null;
       _registrationMessage = null;
+      _pendingUsername = null;
+      _pendingPasswordHash = null;
     });
   }
 
@@ -262,10 +357,11 @@ class _AuthScreenState extends State<AuthScreen> {
             TextField(
               controller: onetimeController,
               decoration: const InputDecoration(
-                labelText: 'Код из приложения (6 цифр)',
+                labelText: 'Второй фактор: Код TOTP (6 цифр)',
                 prefixIcon: Icon(Icons.phone_android),
                 border: OutlineInputBorder(),
-                hintText: 'Введите код при входе',
+                hintText: 'Введите код из приложения аутентификации',
+                helperText: 'После ввода пароля потребуется код TOTP',
               ),
               keyboardType: TextInputType.number,
               maxLength: 6,
@@ -360,6 +456,54 @@ class _AuthScreenState extends State<AuthScreen> {
                             '3. Наведите камеру на QR-код выше',
                             style: TextStyle(fontSize: 12),
                             textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Biometric enrollment button
+                  Card(
+                    color: Colors.blue.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.fingerprint,
+                            size: 48,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Зарегистрируйте отпечаток пальца',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Это третий фактор аутентификации для дополнительной безопасности',
+                            style: TextStyle(fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _enrollBiometric,
+                            icon: const Icon(Icons.fingerprint),
+                            label: const Text('Зарегистрировать отпечаток'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 24,
+                              ),
+                            ),
                           ),
                         ],
                       ),

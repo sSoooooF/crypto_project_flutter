@@ -8,6 +8,7 @@ class User {
   final DateTime createdAt;
 
   String? totpSecret;
+  bool hasBiometricEnabled;
 
   User({
     this.id,
@@ -16,6 +17,7 @@ class User {
     required this.role,
     required this.createdAt,
     this.totpSecret,
+    this.hasBiometricEnabled = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +27,7 @@ class User {
     'role': role.toString().split('.').last,
     'createdAt': createdAt.toIso8601String(),
     'totpSecret': totpSecret,
+    'hasBiometricEnabled': hasBiometricEnabled,
   };
 
   factory User.fromJson(Map<String, dynamic> json) => User(
@@ -36,6 +39,7 @@ class User {
     ),
     createdAt: DateTime.parse(json['createdAt']),
     totpSecret: json['totpSecret'],
+    hasBiometricEnabled: json['hasBiometricEnabled'] ?? false,
   );
 
   bool get isGuest => role == Role.guest;
