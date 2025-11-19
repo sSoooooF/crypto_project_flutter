@@ -12,7 +12,6 @@ class TotpService {
   }
 
   String generateTotpCode(String secret) {
-    // TOTP must use UTC time - Google Authenticator uses UTC
     final currentTime = DateTime.now().toUtc();
     return OTP.generateTOTPCodeString(
       secret,
