@@ -154,8 +154,9 @@ class _AuthScreenState extends State<AuthScreen> {
       Streebog streebog = Streebog();
       streebog.update(utf8.encode(testPassword));
       List<int> digest = streebog.digest();
-      String passwordHash =
-          digest.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+      String passwordHash = digest
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+          .join();
 
       // Регистрируем тестового пользователя с тем же секретом
       User newUser = await _authService.registerUserWithTotp(
