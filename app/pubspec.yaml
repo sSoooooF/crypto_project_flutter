@@ -38,6 +38,15 @@ dependencies:
    path_provider: ^2.1.4
    convert: ^3.1.1
 
+   # Auth dependencies
+   flutter_secure_storage: ^9.2.2
+   local_auth: ^2.3.0
+   hive: ^2.2.3
+   hive_flutter: ^1.1.0
+   qr_flutter: ^4.1.0
+   pointycastle: ^3.9.1
+   crypto: ^3.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
