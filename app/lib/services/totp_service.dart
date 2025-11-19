@@ -1,7 +1,5 @@
 import 'dart:math';
 import 'package:otp/otp.dart';
-import 'package:timezone/data/latest.dart' as timezone;
-import 'package:timezone/timezone.dart' as timezone;
 
 class TotpService {
   String generateTotpSecret() {
@@ -14,45 +12,46 @@ class TotpService {
   }
 
   String generateTotpCode(String secret) {
-    final currentTime = DateTime.now();
-    timezone.initializeTimeZones();
-    final pacificTimeZone = timezone.getLocation('Russia/Moscow');
-    final date = timezone.TZDateTime.from(currentTime, pacificTimeZone);
+    // TOTP must use UTC time - Google Authenticator uses UTC
+    final currentTime = DateTime.now().toUtc();
     return OTP.generateTOTPCodeString(
       secret,
-      date.millisecondsSinceEpoch,
+      currentTime.millisecondsSinceEpoch,
       algorithm: Algorithm.SHA1,
+      isGoogle: true,
     );
   }
 
   bool verifyTotpCode(String secret, String code, {String? username}) {
-    // Используем одну временную метку для всех проверок
-    final currentTime = DateTime.now();
-    timezone.initializeTimeZones();
-    final pacificTimeZone = timezone.getLocation('Russia/Moscow');
-    final date = timezone.TZDateTime.from(currentTime, pacificTimeZone);
+    // TOTP must use UTC time - Google Authenticator uses UTC
+    final currentTime = DateTime.now().toUtc();
+    final currentTimeMs = currentTime.millisecondsSinceEpoch;
 
     final currentCode = OTP.generateTOTPCodeString(
       secret,
-      date.millisecondsSinceEpoch,
+      currentTimeMs,
       algorithm: Algorithm.SHA1,
       isGoogle: true,
     );
     final isValidCurrent = OTP.constantTimeVerification(currentCode, code);
 
-    final previousTime = date.millisecondsSinceEpoch - 30000;
+    // Check previous time window (30 seconds ago)
+    final previousTime = currentTimeMs - 30000;
     final previousCode = OTP.generateTOTPCodeString(
       secret,
       previousTime,
       algorithm: Algorithm.SHA1,
+      isGoogle: true,
     );
     final isValidPrevious = OTP.constantTimeVerification(previousCode, code);
 
-    final nextTime = date.millisecondsSinceEpoch + 30000;
+    // Check next time window (30 seconds ahead)
+    final nextTime = currentTimeMs + 30000;
     final nextCode = OTP.generateTOTPCodeString(
       secret,
       nextTime,
       algorithm: Algorithm.SHA1,
+      isGoogle: true,
     );
     final isValidNext = OTP.constantTimeVerification(nextCode, code);
 
@@ -61,7 +60,7 @@ class TotpService {
     print('TOTP Debug$userInfo:');
     print('  Секрет: $secret');
     print('  Введенный код: $code');
-    print('  Текущий код ($currentTime): $currentCode');
+    print('  Текущий код (UTC $currentTime): $currentCode');
     print('  Предыдущий код ($previousTime): $previousCode');
     print('  Следующий код ($nextTime): $nextCode');
     print('  Текущий код верен: $isValidCurrent');

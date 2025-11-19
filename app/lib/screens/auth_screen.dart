@@ -91,23 +91,21 @@ class _AuthScreenState extends State<AuthScreen> {
         .join();
 
     try {
-      // Генерируем TOTP секрет
-      _totpSecret = _authService.generateTotpSecret();
-
-      // Регистрируем пользователя
-      User newUser = await _authService.registerUser(
+      // Генерируем TOTP секрет и сохраняем того же пользователя
+      final generatedSecret = _authService.generateTotpSecret();
+      User newUser = await _authService.registerUserWithTotp(
         username,
-        password,
+        passwordHash,
         Role.user,
-        generateTotp: true,
+        generatedSecret,
       );
 
       setState(() {
+        _totpSecret = generatedSecret;
         _isRegistering = true;
         _showQrCode = true;
         _qrCodeUrl =
-            //'otpauth://totp/$username?secret=$_totpSecret&issuer=CryptoApp&algorithm=SHA1&digits=6&period=30';
-            'otpauth://totp/CryptoApp:$username?Algorithm=SHA1&digits=6&secret=$_totpSecret&issuer=CryptoApp&period=30';
+            'otpauth://totp/CryptoApp:$username?algorithm=SHA1&digits=6&secret=$_totpSecret&issuer=CryptoApp&period=30';
         _registrationMessage =
             'Регистрация успешна! Добавьте аккаунт в приложение аутентификации:';
       });
@@ -149,21 +147,30 @@ class _AuthScreenState extends State<AuthScreen> {
   void _createTestUser() async {
     try {
       // Генерируем TOTP секрет
-      _totpSecret = _authService.generateTotpSecret();
+      final generatedSecret = _authService.generateTotpSecret();
 
-      // Регистрируем тестового пользователя
-      User newUser = await _authService.registerUser(
+      // Хэшируем пароль тестового пользователя
+      const testPassword = 'testpassword123';
+      Streebog streebog = Streebog();
+      streebog.update(utf8.encode(testPassword));
+      List<int> digest = streebog.digest();
+      String passwordHash =
+          digest.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+
+      // Регистрируем тестового пользователя с тем же секретом
+      User newUser = await _authService.registerUserWithTotp(
         'testuser',
-        'testpassword123',
+        passwordHash,
         Role.user,
-        generateTotp: true,
+        generatedSecret,
       );
 
       setState(() {
+        _totpSecret = generatedSecret;
         _isRegistering = true;
         _showQrCode = true;
         _qrCodeUrl =
-            'otpauth://totp/testuser?secret=$_totpSecret&issuer=CryptoApp';
+            'otpauth://totp/CryptoApp:testuser?algorithm=SHA1&digits=6&secret=$_totpSecret&issuer=CryptoApp&period=30';
         _registrationMessage =
             'Тестовый пользователь создан! Логин: testuser, Пароль: testpassword123\nДобавьте аккаунт в приложение аутентификации:';
       });
