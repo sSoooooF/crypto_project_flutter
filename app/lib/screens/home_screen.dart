@@ -3,8 +3,7 @@ import '../models/user.dart';
 import '../services/database_service.dart';
 import 'crypto_screen.dart';
 import 'admin_screen.dart';
-import 'login_screen.dart';
-import 'login_screen.dart';
+import 'auth_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final User user;
@@ -25,7 +24,7 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                MaterialPageRoute(builder: (context) => const AuthScreen()),
                 (route) => false,
               );
             },
@@ -66,6 +65,10 @@ class HomeScreen extends StatelessWidget {
                 },
                 icon: const Icon(Icons.admin_panel_settings),
                 label: const Text('Админ панель'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ],

@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'dart:convert';
-import '../services/database_service.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../models/user.dart';
-import '../core/streebog/streebog.dart';
 import 'home_screen.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import '../services/totp_service.dart';
+import 'registration/registration_step1_password.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -24,13 +19,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final AuthService _authService = AuthService();
   final BiometricService _biometricService = BiometricService();
 
-  bool _isRegistering = false;
-  bool _showQrCode = false;
-  String? _qrCodeUrl;
-  String? _totpSecret;
-  String? _registrationMessage;
-  String? _pendingUsername;
-  String? _pendingPasswordHash;
 
   @override
   void dispose() {
@@ -113,106 +101,15 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _register() async {
-    String username = usernameController.text;
-    String password = passwordController.text;
-
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Заполните логин и пароль')));
-      return;
-    }
-
-    // Хэшируем пароль
-    Streebog streebog = Streebog();
-    streebog.update(utf8.encode(password));
-    List<int> digest = streebog.digest();
-    String passwordHash = digest
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
-
-    try {
-      // Генерируем TOTP секрет
-      final generatedSecret = _authService.generateTotpSecret();
-      
-      // Сохраняем пользователя сначала без биометрии
-      await _authService.registerUserWithTotp(
-        username,
-        passwordHash,
-        Role.user,
-        generatedSecret,
-        hasBiometricEnabled: false,
-      );
-      
-      // Сохраняем данные для последующего обновления после биометрии
-      setState(() {
-        _pendingUsername = username;
-        _pendingPasswordHash = passwordHash;
-        _totpSecret = generatedSecret;
-        _isRegistering = true;
-        _showQrCode = true;
-        _qrCodeUrl =
-            'otpauth://totp/CryptoApp:$username?algorithm=SHA1&digits=6&secret=$_totpSecret&issuer=CryptoApp&period=30';
-        _registrationMessage =
-            'Регистрация успешна! Добавьте аккаунт в приложение аутентификации:';
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Регистрация успешна!')));
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ошибка регистрации: $e')));
-    }
-  }
-
-  Future<void> _enrollBiometric() async {
-    if (_pendingUsername == null || _pendingPasswordHash == null || _totpSecret == null) {
-      return;
-    }
-
-    // Check if biometric is available
-    final bool isAvailable = await _biometricService.isAvailable();
-    if (!isAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Биометрическая аутентификация недоступна на этом устройстве'),
-        ),
-      );
-      return;
-    }
-
-    // Prompt for fingerprint enrollment
-    final bool success = await _biometricService.authenticate(
-      reason: 'Зарегистрируйте отпечаток пальца для аккаунта $_pendingUsername',
+    // Navigate to multi-step registration
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const RegistrationStep1Password(),
+      ),
     );
-
-    if (success) {
-      try {
-        // Update user's biometric status
-        await _authService.updateUserBiometricStatus(_pendingUsername!, true);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Отпечаток пальца успешно зарегистрирован!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // Reset registration state
-        _resetRegistration();
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка сохранения: $e')),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Регистрация отпечатка отменена')),
-      );
-    }
   }
+
 
   void _loginAsGuest() async {
     User? guest = await _authService.authenticateGuest();
@@ -228,73 +125,6 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _copySecretToClipboard() async {
-    if (_totpSecret != null) {
-      await Clipboard.setData(ClipboardData(text: _totpSecret!));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Секретный код скопирован в буфер обмена'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
-
-  void _resetRegistration() {
-    setState(() {
-      _isRegistering = false;
-      _showQrCode = false;
-      _qrCodeUrl = null;
-      _totpSecret = null;
-      _registrationMessage = null;
-      _pendingUsername = null;
-      _pendingPasswordHash = null;
-    });
-  }
-
-  void _createTestUser() async {
-    try {
-      // Генерируем TOTP секрет
-      final generatedSecret = _authService.generateTotpSecret();
-
-      // Хэшируем пароль тестового пользователя
-      const testPassword = 'testpassword123';
-      Streebog streebog = Streebog();
-      streebog.update(utf8.encode(testPassword));
-      List<int> digest = streebog.digest();
-      String passwordHash = digest
-          .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-          .join();
-
-      // Регистрируем тестового пользователя с тем же секретом
-      User newUser = await _authService.registerUserWithTotp(
-        'testuser',
-        passwordHash,
-        Role.user,
-        generatedSecret,
-      );
-
-      setState(() {
-        _totpSecret = generatedSecret;
-        _isRegistering = true;
-        _showQrCode = true;
-        _qrCodeUrl =
-            'otpauth://totp/CryptoApp:testuser?algorithm=SHA1&digits=6&secret=$_totpSecret&issuer=CryptoApp&period=30';
-        _registrationMessage =
-            'Тестовый пользователь создан! Логин: testuser, Пароль: testpassword123\nДобавьте аккаунт в приложение аутентификации:';
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Тестовый пользователь создан!')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -309,41 +139,16 @@ class _AuthScreenState extends State<AuthScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Заголовок
-            if (_showQrCode)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _registrationMessage ?? '',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Войдите в существующий аккаунт или зарегистрируйте новый',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Войдите в существующий аккаунт или зарегистрируйте новый',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
               ),
+            ),
 
             const SizedBox(height: 24),
 
@@ -355,7 +160,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 prefixIcon: Icon(Icons.person),
                 border: OutlineInputBorder(),
               ),
-              enabled: !_showQrCode,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -366,7 +170,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
-              enabled: !_showQrCode,
             ),
             const SizedBox(height: 12),
             TextField(
@@ -380,212 +183,41 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               keyboardType: TextInputType.number,
               maxLength: 6,
-              enabled: !_showQrCode,
             ),
 
             const SizedBox(height: 24),
 
             // Кнопки
-            if (!_showQrCode)
-              Column(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _login,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Войти'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: _register,
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('Зарегистрироваться'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: _loginAsGuest,
-                    icon: const Icon(Icons.person_off),
-                    label: const Text('Войти как гость'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: _createTestUser,
-                    icon: const Icon(Icons.build),
-                    label: const Text('Создать тестового пользователя'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Column(
-                children: [
-                  // QR-код
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Отсканируйте QR-код:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          QrImageView(
-                            data: _qrCodeUrl!,
-                            version: QrVersions.auto,
-                            size: 200,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            '1. Откройте приложение аутентификации (Google Authenticator, Authy и т.д.)',
-                            style: TextStyle(fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            '2. Нажмите "+" и выберите "Сканировать QR-код"',
-                            style: TextStyle(fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            '3. Наведите камеру на QR-код выше',
-                            style: TextStyle(fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          // Secret code display and copy button
-                          Card(
-                            color: Colors.grey.shade100,
-                            child: Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Секретный код TOTP:',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: SelectableText(
-                                          _totpSecret ?? '',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontFamily: 'monospace',
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        icon: const Icon(Icons.copy),
-                                        tooltip: 'Копировать секретный код',
-                                        onPressed: _totpSecret != null
-                                            ? () => _copySecretToClipboard()
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Biometric enrollment button
-                  Card(
-                    color: Colors.blue.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.fingerprint,
-                            size: 48,
-                            color: Colors.blue,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Зарегистрируйте отпечаток пальца',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Это третий фактор аутентификации для дополнительной безопасности',
-                            style: TextStyle(fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: _enrollBiometric,
-                            icon: const Icon(Icons.fingerprint),
-                            label: const Text('Зарегистрировать отпечаток'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 12,
-                                horizontal: 24,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextButton(
-                    onPressed: _resetRegistration,
-                    child: const Text('Зарегистрировать другой аккаунт'),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  ElevatedButton.icon(
-                    onPressed: _login,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Войти в аккаунт'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ],
+            ElevatedButton.icon(
+              onPressed: _login,
+              icon: const Icon(Icons.login),
+              label: const Text('Войти'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _register,
+              icon: const Icon(Icons.person_add),
+              label: const Text('Зарегистрироваться'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _loginAsGuest,
+              icon: const Icon(Icons.person_off),
+              label: const Text('Войти как гость'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
           ],
         ),
       ),

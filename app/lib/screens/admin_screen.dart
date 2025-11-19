@@ -32,12 +32,50 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _deleteUser(String username) async {
-    final users = await _databaseService.getUsers();
-    final updatedUsers = users
-        .where((user) => user.username != username)
-        .toList();
-    await _databaseService.saveUsers(updatedUsers);
-    _loadData();
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Подтверждение удаления'),
+        content: Text('Вы уверены, что хотите удалить пользователя "$username"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final users = await _databaseService.getUsers();
+        final updatedUsers = users
+            .where((user) => user.username != username)
+            .toList();
+        await _databaseService.saveUsers(updatedUsers);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Пользователь "$username" удален'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        _loadData();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка удаления: $e')),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _createAdmin() async {
@@ -89,24 +127,60 @@ class _AdminScreenState extends State<AdminScreen> {
             const SizedBox(height: 8),
             Expanded(
               flex: 1,
-              child: ListView.builder(
-                itemCount: _users.length,
-                itemBuilder: (context, index) {
-                  final user = _users[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text(user.username),
-                      subtitle: Text(
-                        'Роль: ${user.role.toString().split('.').last}',
+              child: _users.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Нет зарегистрированных пользователей',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteUser(user.username),
-                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _users.length,
+                      itemBuilder: (context, index) {
+                        final user = _users[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: user.role == Role.admin
+                                  ? Colors.red
+                                  : user.role == Role.user
+                                      ? Colors.blue
+                                      : Colors.grey,
+                              child: Text(
+                                user.username[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            title: Text(
+                              user.username,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Роль: ${user.role.toString().split('.').last}'),
+                                if (user.totpSecret != null)
+                                  const Text(
+                                    'TOTP: ✓',
+                                    style: TextStyle(color: Colors.green),
+                                  ),
+                                if (user.hasBiometricEnabled)
+                                  const Text(
+                                    'Биометрия: ✓',
+                                    style: TextStyle(color: Colors.green),
+                                  ),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: 'Удалить пользователя',
+                              onPressed: () => _deleteUser(user.username),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
             const SizedBox(height: 24),
             const Text(
