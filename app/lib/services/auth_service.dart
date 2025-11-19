@@ -21,31 +21,53 @@ class AuthService {
     return OTP.generateTOTPCodeString(
       secret,
       DateTime.now().millisecondsSinceEpoch,
+      isGoogle: true,
     );
   }
 
-  bool verifyTotpCode(String secret, String code) {
-    return OTP.constantTimeVerification(
-          OTP.generateTOTPCodeString(
-            secret,
-            DateTime.now().millisecondsSinceEpoch,
-          ),
-          code,
-        ) ||
-        OTP.constantTimeVerification(
-          OTP.generateTOTPCodeString(
-            secret,
-            DateTime.now().millisecondsSinceEpoch - 30000,
-          ),
-          code,
-        ) ||
-        OTP.constantTimeVerification(
-          OTP.generateTOTPCodeString(
-            secret,
-            DateTime.now().millisecondsSinceEpoch + 30000,
-          ),
-          code,
-        );
+  bool verifyTotpCode(String secret, String code, {String? username}) {
+    // Используем тот же подход, что и в TotpService
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
+
+    final currentCode = OTP.generateTOTPCodeString(
+      secret,
+      currentTime,
+      isGoogle: true,
+      algorithm: Algorithm.SHA1,
+    );
+    final isValidCurrent = OTP.constantTimeVerification(currentCode, code);
+
+    final previousTime = currentTime - 30000;
+    final previousCode = OTP.generateTOTPCodeString(
+      secret,
+      previousTime,
+      isGoogle: true,
+      algorithm: Algorithm.SHA1,
+    );
+    final isValidPrevious = OTP.constantTimeVerification(previousCode, code);
+
+    final nextTime = currentTime + 30000;
+    final nextCode = OTP.generateTOTPCodeString(
+      secret,
+      nextTime,
+      isGoogle: true,
+      algorithm: Algorithm.SHA1,
+    );
+    final isValidNext = OTP.constantTimeVerification(nextCode, code);
+
+    // Для отладки
+    final userInfo = username != null ? ' для пользователя: $username' : '';
+    print('AuthService TOTP Debug$userInfo:');
+    print('  Секрет: $secret');
+    print('  Введенный код: $code');
+    print('  Текущий код ($currentTime): $currentCode');
+    print('  Предыдущий код ($previousTime): $previousCode');
+    print('  Следующий код ($nextTime): $nextCode');
+    print('  Текущий код верен: $isValidCurrent');
+    print('  Предыдущий код верен: $isValidPrevious');
+    print('  Следующий код верен: $isValidNext');
+
+    return isValidCurrent || isValidPrevious || isValidNext;
   }
 
   Future<User?> authenticate(
@@ -69,7 +91,7 @@ class AuthService {
 
       // Если у пользователя есть TOTP секрет, проверяем код
       if (user.totpSecret != null && totpCode != null) {
-        if (!verifyTotpCode(user.totpSecret!, totpCode)) {
+        if (!verifyTotpCode(user.totpSecret!, totpCode, username: username)) {
           return null;
         }
       }

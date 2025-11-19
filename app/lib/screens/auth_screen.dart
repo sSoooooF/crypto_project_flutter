@@ -106,7 +106,7 @@ class _AuthScreenState extends State<AuthScreen> {
         _isRegistering = true;
         _showQrCode = true;
         _qrCodeUrl =
-            'otpauth://totp/$username?secret=$_totpSecret&issuer=CryptoApp';
+            'otpauth://totp/$username?secret=$_totpSecret&issuer=CryptoApp&algorithm=SHA1&digits=6&period=30';
         _registrationMessage =
             'Регистрация успешна! Добавьте аккаунт в приложение аутентификации:';
       });

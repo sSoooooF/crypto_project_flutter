@@ -15,32 +15,53 @@ class TotpService {
     return OTP.generateTOTPCodeString(
       secret,
       DateTime.now().millisecondsSinceEpoch,
+      algorithm: Algorithm.SHA1,
+      isGoogle: true,
     );
   }
 
-  bool verifyTotpCode(String secret, String code) {
-    // Проверяем текущий код
-    if (OTP.constantTimeVerification(
-      OTP.generateTOTPCodeString(secret, DateTime.now().millisecondsSinceEpoch),
-      code,
-    )) {
-      return true;
-    }
+  bool verifyTotpCode(String secret, String code, {String? username}) {
+    // Используем одну временную метку для всех проверок
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
 
-    // Проверяем коды из предыдущего и следующего временных интервалов (30 секунд)
-    for (int offset = -30000; offset <= 30000; offset += 30000) {
-      if (offset != 0 &&
-          OTP.constantTimeVerification(
-            OTP.generateTOTPCodeString(
-              secret,
-              DateTime.now().millisecondsSinceEpoch + offset,
-            ),
-            code,
-          )) {
-        return true;
-      }
-    }
+    final currentCode = OTP.generateTOTPCodeString(
+      secret,
+      currentTime,
+      algorithm: Algorithm.SHA1,
+      isGoogle: true,
+    );
+    final isValidCurrent = OTP.constantTimeVerification(currentCode, code);
 
-    return false;
+    final previousTime = currentTime - 30;
+    final previousCode = OTP.generateTOTPCodeString(
+      secret,
+      previousTime,
+      algorithm: Algorithm.SHA1,
+      isGoogle: true,
+    );
+    final isValidPrevious = OTP.constantTimeVerification(previousCode, code);
+
+    final nextTime = currentTime + 30;
+    final nextCode = OTP.generateTOTPCodeString(
+      secret,
+      nextTime,
+      algorithm: Algorithm.SHA1,
+      isGoogle: true,
+    );
+    final isValidNext = OTP.constantTimeVerification(nextCode, code);
+
+    // Для отладки - выводим информацию с указанием пользователя
+    final userInfo = username != null ? ' для пользователя: $username' : '';
+    print('TOTP Debug$userInfo:');
+    print('  Секрет: $secret');
+    print('  Введенный код: $code');
+    print('  Текущий код ($currentTime): $currentCode');
+    print('  Предыдущий код ($previousTime): $previousCode');
+    print('  Следующий код ($nextTime): $nextCode');
+    print('  Текущий код верен: $isValidCurrent');
+    print('  Предыдущий код верен: $isValidPrevious');
+    print('  Следующий код верен: $isValidNext');
+
+    return isValidCurrent || isValidPrevious || isValidNext;
   }
 }
