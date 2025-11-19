@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'package:otp/otp.dart';
+import 'package:timezone/data/latest.dart' as timezone;
+import 'package:timezone/timezone.dart' as timezone;
 
 class TotpService {
   String generateTotpSecret() {
@@ -12,41 +14,45 @@ class TotpService {
   }
 
   String generateTotpCode(String secret) {
+    final currentTime = DateTime.now();
+    timezone.initializeTimeZones();
+    final pacificTimeZone = timezone.getLocation('Russia/Moscow');
+    final date = timezone.TZDateTime.from(currentTime, pacificTimeZone);
     return OTP.generateTOTPCodeString(
       secret,
-      DateTime.now().millisecondsSinceEpoch,
+      date.millisecondsSinceEpoch,
       algorithm: Algorithm.SHA1,
-      isGoogle: true,
     );
   }
 
   bool verifyTotpCode(String secret, String code, {String? username}) {
     // Используем одну временную метку для всех проверок
-    final currentTime = DateTime.now().millisecondsSinceEpoch;
+    final currentTime = DateTime.now();
+    timezone.initializeTimeZones();
+    final pacificTimeZone = timezone.getLocation('Russia/Moscow');
+    final date = timezone.TZDateTime.from(currentTime, pacificTimeZone);
 
     final currentCode = OTP.generateTOTPCodeString(
       secret,
-      currentTime,
+      date.millisecondsSinceEpoch,
       algorithm: Algorithm.SHA1,
       isGoogle: true,
     );
     final isValidCurrent = OTP.constantTimeVerification(currentCode, code);
 
-    final previousTime = currentTime - 30;
+    final previousTime = date.millisecondsSinceEpoch - 30000;
     final previousCode = OTP.generateTOTPCodeString(
       secret,
       previousTime,
       algorithm: Algorithm.SHA1,
-      isGoogle: true,
     );
     final isValidPrevious = OTP.constantTimeVerification(previousCode, code);
 
-    final nextTime = currentTime + 30;
+    final nextTime = date.millisecondsSinceEpoch + 30000;
     final nextCode = OTP.generateTOTPCodeString(
       secret,
       nextTime,
       algorithm: Algorithm.SHA1,
-      isGoogle: true,
     );
     final isValidNext = OTP.constantTimeVerification(nextCode, code);
 
