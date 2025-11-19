@@ -6,8 +6,8 @@ class User {
   final String passwordHash;
   final Role role;
   final DateTime createdAt;
-  
-  var totpSecret;
+
+  String? totpSecret;
 
   User({
     this.id,
@@ -24,6 +24,7 @@ class User {
     'passwordHash': passwordHash,
     'role': role.toString().split('.').last,
     'createdAt': createdAt.toIso8601String(),
+    'totpSecret': totpSecret,
   };
 
   factory User.fromJson(Map<String, dynamic> json) => User(
@@ -34,6 +35,7 @@ class User {
       (e) => e.toString().split('.').last == json['role'],
     ),
     createdAt: DateTime.parse(json['createdAt']),
+    totpSecret: json['totpSecret'],
   );
 
   bool get isGuest => role == Role.guest;
