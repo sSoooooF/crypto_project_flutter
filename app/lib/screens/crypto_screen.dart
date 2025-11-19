@@ -21,6 +21,7 @@ class CryptoScreen extends StatefulWidget {
 }
 
 class _CryptoScreenState extends State<CryptoScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   Algorithm selectedAlgorithm = Algorithm.rsa;
   final TextEditingController plaintextController = TextEditingController();
   final TextEditingController ciphertextController = TextEditingController();
@@ -199,7 +200,20 @@ class _CryptoScreenState extends State<CryptoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Шифрование/Дешифрование')),
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('Шифрование/Дешифрование'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          ),
+        ],
+      ),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
