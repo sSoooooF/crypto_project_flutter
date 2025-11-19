@@ -6,6 +6,8 @@ class User {
   final String passwordHash;
   final Role role;
   final DateTime createdAt;
+  
+  var totpSecret;
 
   User({
     this.id,
@@ -13,6 +15,7 @@ class User {
     required this.passwordHash,
     required this.role,
     required this.createdAt,
+    this.totpSecret,
   });
 
   Map<String, dynamic> toJson() => {

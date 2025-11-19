@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 import '../models/user.dart';
 import '../core/streebog/streebog.dart';
 import 'home_screen.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

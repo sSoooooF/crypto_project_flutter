@@ -86,8 +86,9 @@ class DatabaseService {
   Future<void> registerUser(
     String username,
     String passwordHash,
-    Role role,
-  ) async {
+    Role role, {
+    String? totpSecret,
+  }) async {
     final users = await getUsers();
     if (users.any((user) => user.username == username)) {
       throw Exception('Пользователь уже существует');
@@ -99,6 +100,7 @@ class DatabaseService {
         passwordHash: passwordHash,
         role: role,
         createdAt: DateTime.now(),
+        totpSecret: totpSecret,
       ),
     );
     await saveUsers(users);
