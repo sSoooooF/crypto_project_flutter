@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:crypto_project_core/rsa/rsa.dart';
-import 'package:crypto_project_core/Kuznyechik/kuznechik.dart';
-import 'package:crypto_project_core/streebog/streebog.dart';
+
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:io';
+
+import 'core/rsa/rsa.dart';
+import 'core/Kuznyechik/kuznechik.dart';
+import 'core/streebog/streebog.dart';
 
 enum Algorithm { rsa, kuznechik, streebog }
 
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Крипто приложение',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
         useMaterial3: true,
       ),
       home: const MyHomePage(title: 'Крипто приложение'),
@@ -104,7 +104,7 @@ class _MyHomePageState extends State<MyHomePage> {
       for (int i = 0; i < hex.length; i += 2) {
         bytes.add(int.parse(hex.substring(i, i + 2), radix: 16));
       }
-      return utf8.decode(bytes);
+      return utf8.decode(bytes, allowMalformed: true);
     } catch (e) {
       return 'Ошибка дешифрования: $e';
     }
@@ -121,7 +121,9 @@ class _MyHomePageState extends State<MyHomePage> {
       List<Uint8List> encryptedBlocks = blocks
           .map((b) => kuznechik.encryptBlock(b))
           .toList();
-      Uint8List result = encryptedBlocks.expand((b) => b).toList();
+      Uint8List result = Uint8List.fromList(
+        encryptedBlocks.expand((b) => b).toList(),
+      );
       return result.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     } catch (e) {
       return 'Ошибка шифрования: $e';
@@ -155,7 +157,9 @@ class _MyHomePageState extends State<MyHomePage> {
   String _hashStreebog(String text) {
     try {
       Uint8List data = utf8.encode(text);
-      Uint8List hash = Streebog.hash(data);
+      Streebog streebog = Streebog();
+      streebog.update(data);
+      Uint8List hash = streebog.digest();
       return hash.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     } catch (e) {
       return 'Ошибка хэширования: $e';
@@ -205,135 +209,162 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: <Widget>[
-            DropdownButton<Algorithm>(
-              value: selectedAlgorithm,
-              onChanged: (Algorithm? newValue) {
-                setState(() {
-                  selectedAlgorithm = newValue!;
-                  plaintextController.clear();
-                  ciphertextController.clear();
-                  hashController.clear();
-                });
-              },
-              items: Algorithm.values.map((Algorithm algorithm) {
-                return DropdownMenuItem<Algorithm>(
-                  value: algorithm,
-                  child: Text(
-                    algorithm == Algorithm.rsa
-                        ? 'RSA'
-                        : algorithm == Algorithm.kuznechik
-                        ? 'Кузнечик'
-                        : 'Стрибог',
-                  ),
-                );
-              }).toList(),
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                'Выберите алгоритм',
+                style: TextStyle(color: Colors.white, fontSize: 24),
+              ),
             ),
-            const SizedBox(height: 16),
-            if (selectedAlgorithm != Algorithm.streebog) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: plaintextController,
-                      decoration: const InputDecoration(
-                        labelText: 'Исходный текст',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy),
-                    onPressed: () => _copyToClipboard(plaintextController.text),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: ciphertextController,
-                      decoration: const InputDecoration(
-                        labelText: 'Зашифрованный текст',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                      readOnly: true,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy),
-                    onPressed: () =>
-                        _copyToClipboard(ciphertextController.text),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: _encrypt,
-                    child: const Text('Зашифровать'),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: _decrypt,
-                    child: const Text('Дешифровать'),
-                  ),
-                ],
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: plaintextController,
-                      decoration: const InputDecoration(
-                        labelText: 'Текст для хэширования',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy),
-                    onPressed: () => _copyToClipboard(plaintextController.text),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: hashController,
-                      decoration: const InputDecoration(
-                        labelText: 'Хэш',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                      readOnly: true,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy),
-                    onPressed: () => _copyToClipboard(hashController.text),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _encrypt, // reuse for hash
-                child: const Text('Хэшировать'),
-              ),
-            ],
+            ...Algorithm.values.map((Algorithm algorithm) {
+              String label = algorithm == Algorithm.rsa
+                  ? 'RSA'
+                  : algorithm == Algorithm.kuznechik
+                  ? 'Кузнечик'
+                  : 'Стрибог';
+              return ListTile(
+                title: Text(label),
+                selected: selectedAlgorithm == algorithm,
+                onTap: () {
+                  setState(() {
+                    selectedAlgorithm = algorithm;
+                    plaintextController.clear();
+                    ciphertextController.clear();
+                    hashController.clear();
+                  });
+                  Navigator.of(context).pop(); // Закрыть drawer
+                },
+              );
+            }),
           ],
         ),
+      ),
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: <Widget>[
+                if (selectedAlgorithm != Algorithm.streebog) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: plaintextController,
+                          decoration: const InputDecoration(
+                            labelText: 'Исходный текст',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 3,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: () =>
+                            _copyToClipboard(plaintextController.text),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: ciphertextController,
+                          decoration: const InputDecoration(
+                            labelText: 'Зашифрованный текст',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 3,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: () =>
+                            _copyToClipboard(ciphertextController.text),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      ElevatedButton(
+                        onPressed: _encrypt,
+                        child: const Text('Зашифровать'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _decrypt,
+                        child: const Text('Дешифровать'),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: plaintextController,
+                          decoration: const InputDecoration(
+                            labelText: 'Текст для хэширования',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 3,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: () =>
+                            _copyToClipboard(plaintextController.text),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: hashController,
+                          decoration: const InputDecoration(
+                            labelText: 'Хэш',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                          readOnly: true,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        onPressed: () => _copyToClipboard(hashController.text),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _encrypt, // reuse for hash
+                    child: const Text('Хэшировать'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Text(
+              'Текущий алгоритм: ${selectedAlgorithm == Algorithm.rsa
+                  ? 'RSA'
+                  : selectedAlgorithm == Algorithm.kuznechik
+                  ? 'Кузнечик'
+                  : 'Стрибог'}',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }
