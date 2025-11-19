@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import '../services/database_service.dart';
 import '../services/auth_service.dart';
@@ -224,6 +225,20 @@ class _AuthScreenState extends State<AuthScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Гость не найден')));
+    }
+  }
+
+  void _copySecretToClipboard() async {
+    if (_totpSecret != null) {
+      await Clipboard.setData(ClipboardData(text: _totpSecret!));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Секретный код скопирован в буфер обмена'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -456,6 +471,48 @@ class _AuthScreenState extends State<AuthScreen> {
                             '3. Наведите камеру на QR-код выше',
                             style: TextStyle(fontSize: 12),
                             textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          // Secret code display and copy button
+                          Card(
+                            color: Colors.grey.shade100,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Секретный код TOTP:',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: SelectableText(
+                                          _totpSecret ?? '',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontFamily: 'monospace',
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.copy),
+                                        tooltip: 'Копировать секретный код',
+                                        onPressed: _totpSecret != null
+                                            ? () => _copySecretToClipboard()
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
