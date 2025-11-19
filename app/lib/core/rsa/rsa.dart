@@ -2,6 +2,7 @@ import 'dart:core';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 
 /// Класс для хранения пары ключей RSA.
 /// n — модуль (произведение двух простых чисел),
@@ -135,11 +136,46 @@ Future<RSAKeyPair> generateRSAKeyPairFromFiles(
   return RSAKeyPair(n, e, d);
 }
 
-/// Чтение большого простого числа из файла.
+/// Чтение большого простого числа из файла или asset.
 /// Фильтрует только видимые ASCII-цифры, чтобы избежать ошибок декодирования.
 Future<BigInt> readPrime(String path) async {
-  final bytes = await File(path).readAsBytes();
-  // Преобразуем только видимые ASCII-цифры
-  final str = String.fromCharCodes(bytes.where((b) => b >= 0x30 && b <= 0x39));
+  Uint8List bytes;
+  
+  // For assets, try rootBundle first (works on all platforms including Windows)
+  if (path.startsWith('assets/')) {
+    try {
+      // Use load() to get bytes instead of loadString() to avoid UTF-8 decoding issues
+      final ByteData data = await rootBundle.load(path);
+      bytes = data.buffer.asUint8List();
+    } catch (e) {
+      // Fallback to File() for desktop platforms if rootBundle fails
+      // This handles cases where assets might be accessible as files on Windows/desktop
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        try {
+          bytes = await File(path).readAsBytes();
+        } catch (e2) {
+          throw Exception('Failed to load asset $path: rootBundle error: $e, File error: $e2');
+        }
+      } else {
+        // On mobile, rootBundle is the only option
+        throw Exception('Failed to load asset $path: $e. Make sure the asset is declared in pubspec.yaml');
+      }
+    }
+  } else {
+    // For file paths (desktop/Windows/Linux/macOS)
+    try {
+      bytes = await File(path).readAsBytes();
+    } catch (e) {
+      throw Exception('Failed to load file $path: $e');
+    }
+  }
+  
+  // Преобразуем только видимые ASCII-цифры (0x30-0x39)
+  final str = String.fromCharCodes(
+    bytes.where((b) => b >= 0x30 && b <= 0x39)
+  );
+  if (str.isEmpty) {
+    throw Exception('No valid digits found in $path');
+  }
   return BigInt.parse(str);
 }

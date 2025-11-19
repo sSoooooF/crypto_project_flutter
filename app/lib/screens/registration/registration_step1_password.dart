@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../auth_screen.dart';
+import 'registration_step2_totp.dart';
 
 class RegistrationStep1Password extends StatefulWidget {
   const RegistrationStep1Password({super.key});

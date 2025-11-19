@@ -94,11 +94,13 @@ class _AdminScreenState extends State<AdminScreen> {
         passwordHash,
         Role.admin,
       );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Админ создан: admin/admin123')),
       );
       _loadData();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));

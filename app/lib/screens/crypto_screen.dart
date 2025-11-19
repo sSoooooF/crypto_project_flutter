@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
-import 'dart:typed_data';
 import '../models/user.dart';
 import '../models/encrypted_text.dart';
 import '../services/database_service.dart';
@@ -28,8 +27,10 @@ class _CryptoScreenState extends State<CryptoScreen> {
   final TextEditingController hashController = TextEditingController();
   final DatabaseService _databaseService = DatabaseService();
 
-  late RSAKeyPair rsaKeyPair;
-  late Kuznechik kuznechik;
+  RSAKeyPair? rsaKeyPair;
+  Kuznechik? kuznechik;
+  bool _isInitializing = true;
+  String? _initializationError;
 
   @override
   void initState() {
@@ -38,12 +39,28 @@ class _CryptoScreenState extends State<CryptoScreen> {
   }
 
   Future<void> _initializeAlgorithms() async {
-    rsaKeyPair = await generateRSAKeyPairFromFiles(
-      'assets/prime1.txt',
-      'assets/prime2.txt',
-    );
-    final Uint8List key = Uint8List.fromList(List.generate(32, (i) => i % 256));
-    kuznechik = Kuznechik(key);
+    try {
+      setState(() {
+        _isInitializing = true;
+        _initializationError = null;
+      });
+
+      rsaKeyPair = await generateRSAKeyPairFromFiles(
+        'assets/prime1.txt',
+        'assets/prime2.txt',
+      );
+      final Uint8List key = Uint8List.fromList(List.generate(32, (i) => i % 256));
+      kuznechik = Kuznechik(key);
+
+      setState(() {
+        _isInitializing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isInitializing = false;
+        _initializationError = 'Ошибка инициализации: $e';
+      });
+    }
   }
 
   Uint8List _addPKCS7Padding(Uint8List data, int blockSize) {
@@ -66,12 +83,15 @@ class _CryptoScreenState extends State<CryptoScreen> {
 
   String _encryptRSA(String text) {
     try {
+      if (rsaKeyPair == null) {
+        return 'Ошибка шифрования: RSA ключи не инициализированы';
+      }
       List<int> bytes = utf8.encode(text);
       BigInt message = BigInt.parse(
         bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
         radix: 16,
       );
-      BigInt encrypted = encrypt(message, rsaKeyPair);
+      BigInt encrypted = encrypt(message, rsaKeyPair!);
       return encrypted.toRadixString(16);
     } catch (e) {
       return 'Ошибка шифрования: $e';
@@ -80,8 +100,11 @@ class _CryptoScreenState extends State<CryptoScreen> {
 
   String _decryptRSA(String hexText) {
     try {
+      if (rsaKeyPair == null) {
+        return 'Ошибка дешифрования: RSA ключи не инициализированы';
+      }
       BigInt encrypted = BigInt.parse(hexText, radix: 16);
-      BigInt decrypted = decrypt(encrypted, rsaKeyPair);
+      BigInt decrypted = decrypt(encrypted, rsaKeyPair!);
       List<int> bytes = [];
       String hex = decrypted
           .toRadixString(16)
@@ -97,6 +120,9 @@ class _CryptoScreenState extends State<CryptoScreen> {
 
   String _encryptKuznechik(String text) {
     try {
+      if (kuznechik == null) {
+        return 'Ошибка шифрования: Kuznechik не инициализирован';
+      }
       Uint8List data = utf8.encode(text);
       Uint8List padded = _addPKCS7Padding(data, 16);
       List<Uint8List> blocks = [];
@@ -104,7 +130,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
         blocks.add(padded.sublist(i, i + 16));
       }
       List<Uint8List> encryptedBlocks = blocks
-          .map((b) => kuznechik.encryptBlock(b))
+          .map((b) => kuznechik!.encryptBlock(b))
           .toList();
       Uint8List result = Uint8List.fromList(
         encryptedBlocks.expand((b) => b).toList(),
@@ -117,6 +143,9 @@ class _CryptoScreenState extends State<CryptoScreen> {
 
   String _decryptKuznechik(String hexText) {
     try {
+      if (kuznechik == null) {
+        return 'Ошибка дешифрования: Kuznechik не инициализирован';
+      }
       List<int> bytes = [];
       for (int i = 0; i < hexText.length; i += 2) {
         bytes.add(int.parse(hexText.substring(i, i + 2), radix: 16));
@@ -127,7 +156,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
         blocks.add(data.sublist(i, i + 16));
       }
       List<Uint8List> decryptedBlocks = blocks
-          .map((b) => kuznechik.decryptBlock(b))
+          .map((b) => kuznechik!.decryptBlock(b))
           .toList();
       Uint8List padded = Uint8List.fromList(
         decryptedBlocks.expand((b) => b).toList(),
@@ -216,7 +245,7 @@ class _CryptoScreenState extends State<CryptoScreen> {
       ),
       drawer: Drawer(
         child: ListView(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.only(top: 56.0),
           children: Algorithm.values.map((Algorithm algorithm) {
             String label = algorithm == Algorithm.rsa
                 ? 'RSA'
@@ -239,10 +268,42 @@ class _CryptoScreenState extends State<CryptoScreen> {
           }).toList(),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
+      body: _isInitializing
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Инициализация алгоритмов шифрования...'),
+                ],
+              ),
+            )
+          : _initializationError != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        _initializationError!,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _initializeAlgorithms,
+                        child: const Text('Повторить инициализацию'),
+                      ),
+                    ],
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
             if (selectedAlgorithm != Algorithm.streebog) ...[
               TextField(
                 controller: plaintextController,
@@ -253,13 +314,29 @@ class _CryptoScreenState extends State<CryptoScreen> {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: ciphertextController,
-                decoration: const InputDecoration(
-                  labelText: 'Зашифрованный текст',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: ciphertextController,
+                      decoration: const InputDecoration(
+                        labelText: 'Зашифрованный текст',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy),
+                    tooltip: 'Копировать зашифрованный текст',
+                    onPressed: () {
+                      if (ciphertextController.text.isNotEmpty) {
+                        _copyToClipboard(ciphertextController.text);
+                      }
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Row(
@@ -285,14 +362,30 @@ class _CryptoScreenState extends State<CryptoScreen> {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: hashController,
-                decoration: const InputDecoration(
-                  labelText: 'Хэш',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-                readOnly: true,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: hashController,
+                      decoration: const InputDecoration(
+                        labelText: 'Хэш',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 2,
+                      readOnly: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.copy),
+                    tooltip: 'Копировать хэш',
+                    onPressed: () {
+                      if (hashController.text.isNotEmpty) {
+                        _copyToClipboard(hashController.text);
+                      }
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -300,14 +393,19 @@ class _CryptoScreenState extends State<CryptoScreen> {
                 child: const Text('Хэшировать'),
               ),
             ],
-            const SizedBox(height: 16),
-            Text(
-              'Алгоритм: ${selectedAlgorithm == Algorithm.rsa
-                  ? "RSA"
-                  : selectedAlgorithm == Algorithm.kuznechik
-                  ? "Кузнечик"
-                  : "Стрибог"}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Center(
+                child: Text(
+                  'Алгоритм: ${selectedAlgorithm == Algorithm.rsa
+                      ? "RSA"
+                      : selectedAlgorithm == Algorithm.kuznechik
+                      ? "Кузнечик"
+                      : "Стрибог"}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
           ],
         ),

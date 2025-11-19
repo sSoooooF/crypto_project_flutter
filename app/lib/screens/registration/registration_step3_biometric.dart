@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../models/user.dart';
@@ -27,11 +28,20 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
   final _biometricService = BiometricService();
   bool _biometricEnabled = false;
   bool _isLoading = false;
+  IconData _biometricIcon = Icons.fingerprint;
 
   @override
   void initState() {
     super.initState();
     _checkBiometricAvailability();
+    _loadBiometricType();
+  }
+
+  Future<void> _loadBiometricType() async {
+    final typeName = await _biometricService.getBiometricTypeName();
+    setState(() {
+      _biometricIcon = typeName == 'Face ID' ? Icons.face : Icons.fingerprint;
+    });
   }
 
   Future<void> _checkBiometricAvailability() async {
@@ -65,9 +75,11 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
       return;
     }
 
-    final success = await _biometricService.authenticate(
-      reason: 'Зарегистрируйте отпечаток пальца для аккаунта ${widget.username}',
-    );
+    final reason = Platform.isIOS
+        ? 'Зарегистрируйте Face ID для аккаунта ${widget.username}'
+        : 'Зарегистрируйте отпечаток пальца для аккаунта ${widget.username}';
+
+    final success = await _biometricService.authenticate(reason: reason);
 
     setState(() {
       _isLoading = false;
@@ -75,15 +87,21 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
     });
 
     if (success && mounted) {
+      final successMessage = Platform.isIOS
+          ? 'Face ID успешно зарегистрирован!'
+          : 'Отпечаток пальца успешно зарегистрирован!';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Отпечаток пальца успешно зарегистрирован!'),
+        SnackBar(
+          content: Text(successMessage),
           backgroundColor: Colors.green,
         ),
       );
     } else if (!success && mounted) {
+      final cancelMessage = Platform.isIOS
+          ? 'Регистрация Face ID отменена'
+          : 'Регистрация отпечатка отменена';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Регистрация отпечатка отменена')),
+        SnackBar(content: Text(cancelMessage)),
       );
     }
   }
@@ -157,7 +175,7 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
-                    const Icon(Icons.fingerprint, size: 48, color: Colors.blue),
+                    Icon(_biometricIcon, size: 48, color: Colors.blue),
                     const SizedBox(height: 16),
                     const Text(
                       'Третий фактор: Биометрия',
@@ -168,7 +186,9 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Дополнительная защита с помощью отпечатка пальца',
+                      Platform.isIOS
+                          ? 'Дополнительная защита с помощью Face ID'
+                          : 'Дополнительная защита с помощью отпечатка пальца',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade600,
@@ -187,7 +207,7 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
                 child: Column(
                   children: [
                     Icon(
-                      _biometricEnabled ? Icons.check_circle : Icons.fingerprint,
+                      _biometricEnabled ? Icons.check_circle : _biometricIcon,
                       size: 64,
                       color: _biometricEnabled ? Colors.green : Colors.blue,
                     ),
@@ -205,7 +225,9 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
                     const SizedBox(height: 8),
                     Text(
                       _biometricEnabled
-                          ? 'Отпечаток пальца будет использоваться при входе'
+                          ? (Platform.isIOS
+                              ? 'Face ID будет использоваться при входе'
+                              : 'Отпечаток пальца будет использоваться при входе')
                           : 'Вы можете пропустить этот шаг и настроить биометрию позже',
                       style: const TextStyle(fontSize: 14),
                       textAlign: TextAlign.center,
@@ -218,8 +240,10 @@ class _RegistrationStep3BiometricState extends State<RegistrationStep3Biometric>
             if (!_biometricEnabled)
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _enrollBiometric,
-                icon: const Icon(Icons.fingerprint),
-                label: const Text('Зарегистрировать отпечаток пальца'),
+                icon: Icon(_biometricIcon),
+                label: Text(Platform.isIOS
+                    ? 'Зарегистрировать Face ID'
+                    : 'Зарегистрировать отпечаток пальца'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),

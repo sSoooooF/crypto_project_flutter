@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/auth_screen.dart';
 import 'services/auth_service.dart';
+import 'services/database_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +13,15 @@ void main() async {
   // Создаем тестового пользователя при запуске
   final authService = AuthService();
   await authService.createTestUser();
+
+  // Создаем админа только если он еще не существует
+  final databaseService = DatabaseService();
+  final users = await databaseService.getUsers();
+  final adminExists = users.any((u) => u.username == 'admin' && u.totpSecret != null);
+  
+  if (!adminExists) {
+    await authService.createAdminUser();
+  }
 
   runApp(const MyApp());
 }

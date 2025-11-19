@@ -213,4 +213,65 @@ class AuthService {
       print('Ошибка создания тестового пользователя: $e');
     }
   }
+
+  Future<String?> createAdminUser() async {
+    try {
+      // Проверяем, существует ли уже админ пользователь
+      final users = await _databaseService.getUsers();
+      User? existingAdmin = users.firstWhere(
+        (u) => u.username == 'admin',
+        orElse: () => User(
+          username: '',
+          passwordHash: '',
+          role: Role.guest,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      String adminSecret;
+      if (existingAdmin.username == 'admin' && existingAdmin.totpSecret != null) {
+        // Админ уже существует, используем существующий секрет
+        adminSecret = existingAdmin.totpSecret!;
+        print('═══════════════════════════════════════════════════════');
+        print('АДМИН ПОЛЬЗОВАТЕЛЬ УЖЕ СУЩЕСТВУЕТ:');
+        print('═══════════════════════════════════════════════════════');
+      } else {
+        // Хэшируем пароль админа
+        const adminPassword = 'admin123';
+        Streebog streebog = Streebog();
+        streebog.update(utf8.encode(adminPassword));
+        List<int> digest = streebog.digest();
+        String passwordHash = digest
+            .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+            .join();
+
+        // Генерируем TOTP секрет для админа
+        adminSecret = generateTotpSecret();
+
+        // Создаем админ пользователя с TOTP
+        await registerUserWithTotp(
+          'admin',
+          passwordHash,
+          Role.admin,
+          adminSecret,
+          hasBiometricEnabled: false,
+        );
+
+        print('═══════════════════════════════════════════════════════');
+        print('АДМИН ПОЛЬЗОВАТЕЛЬ СОЗДАН:');
+        print('═══════════════════════════════════════════════════════');
+      }
+
+      print('Логин: admin');
+      print('Пароль: admin123');
+      print('TOTP секрет: $adminSecret');
+      print('QR-код URI: otpauth://totp/CryptoApp:admin?algorithm=SHA1&digits=6&secret=$adminSecret&issuer=CryptoApp&period=30');
+      print('═══════════════════════════════════════════════════════');
+      
+      return adminSecret;
+    } catch (e) {
+      print('Ошибка создания админ пользователя: $e');
+      return null;
+    }
+  }
 }

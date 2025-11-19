@@ -1,5 +1,6 @@
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 
 class BiometricService {
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -26,10 +27,40 @@ class BiometricService {
     }
   }
 
+  /// Get the primary biometric type available on the device
+  /// Returns 'Face ID' on iOS, 'Fingerprint' on Android, or 'Biometric' as fallback
+  Future<String> getBiometricTypeName() async {
+    try {
+      final availableBiometrics = await getAvailableBiometrics();
+      if (availableBiometrics.contains(BiometricType.face)) {
+        return 'Face ID';
+      } else if (availableBiometrics.contains(BiometricType.fingerprint)) {
+        return 'Fingerprint';
+      } else if (availableBiometrics.contains(BiometricType.strong)) {
+        return Platform.isIOS ? 'Face ID' : 'Fingerprint';
+      } else if (availableBiometrics.contains(BiometricType.weak)) {
+        return Platform.isIOS ? 'Face ID' : 'Fingerprint';
+      }
+      return Platform.isIOS ? 'Face ID' : 'Fingerprint';
+    } catch (e) {
+      return Platform.isIOS ? 'Face ID' : 'Fingerprint';
+    }
+  }
+
+  /// Get localized biometric name for UI
+  Future<String> getLocalizedBiometricName() async {
+    final type = await getBiometricTypeName();
+    if (type == 'Face ID') {
+      return 'Face ID';
+    } else {
+      return 'отпечаток пальца';
+    }
+  }
+
   /// Authenticate user with biometric (fingerprint/face)
   /// Returns true if authentication is successful
   Future<bool> authenticate({
-    String reason = 'Пожалуйста, подтвердите свою личность',
+    String? reason,
     bool useErrorDialogs = true,
     bool stickyAuth = true,
   }) async {
@@ -39,8 +70,14 @@ class BiometricService {
         throw Exception('Биометрическая аутентификация недоступна на этом устройстве');
       }
 
+      // Use platform-appropriate reason if not provided
+      final String authReason = reason ?? 
+        (Platform.isIOS 
+          ? 'Используйте Face ID для подтверждения'
+          : 'Используйте отпечаток пальца для подтверждения');
+
       final bool didAuthenticate = await _localAuth.authenticate(
-        localizedReason: reason,
+        localizedReason: authReason,
         options: AuthenticationOptions(
           useErrorDialogs: useErrorDialogs,
           stickyAuth: stickyAuth,

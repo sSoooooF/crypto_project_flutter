@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../models/user.dart';
@@ -36,6 +38,7 @@ class _AuthScreenState extends State<AuthScreen> {
     // Guest login (if nothing entered)
     if (username.isEmpty && password.isEmpty && onetimeCode.isEmpty) {
       User? guest = await _authService.authenticateGuest();
+      if (!mounted) return;
       if (guest != null) {
         Navigator.pushReplacement(
           context,
@@ -46,6 +49,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     if (password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Введите пароль')),
       );
@@ -58,6 +62,8 @@ class _AuthScreenState extends State<AuthScreen> {
       password,
       onetimeCode.isNotEmpty ? onetimeCode : null,
     );
+
+    if (!mounted) return;
 
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,6 +78,7 @@ class _AuthScreenState extends State<AuthScreen> {
     // Step 3: Verify fingerprint/biometric (if enabled)
     if (user.hasBiometricEnabled) {
       final bool isBiometricAvailable = await _biometricService.isAvailable();
+      if (!mounted) return;
       if (!isBiometricAvailable) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -81,9 +88,13 @@ class _AuthScreenState extends State<AuthScreen> {
         return;
       }
 
-      final bool biometricSuccess = await _biometricService.authenticate(
-        reason: 'Подтвердите свою личность для входа в аккаунт ${user.username}',
-      );
+      final reason = Platform.isIOS
+          ? 'Используйте Face ID для входа в аккаунт ${user.username}'
+          : 'Используйте отпечаток пальца для входа в аккаунт ${user.username}';
+
+      final bool biometricSuccess = await _biometricService.authenticate(reason: reason);
+
+      if (!mounted) return;
 
       if (!biometricSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +105,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     // All authentication factors passed
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => HomeScreen(user: user)),
@@ -113,6 +125,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _loginAsGuest() async {
     User? guest = await _authService.authenticateGuest();
+    if (!mounted) return;
     if (guest != null) {
       Navigator.pushReplacement(
         context,

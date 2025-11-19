@@ -1,6 +1,3 @@
-import '../core/streebog/streebog.dart';
-import 'dart:convert';
-
 class EncryptedText {
   final String? id;
   final String username;

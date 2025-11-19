@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
-import '../services/database_service.dart';
 import 'crypto_screen.dart';
 import 'admin_screen.dart';
 import 'auth_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final User user;
-  final DatabaseService _databaseService = DatabaseService();
 
   HomeScreen({super.key, required this.user});
 

@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
-import '../services/auth_service.dart';
 import '../services/totp_service.dart';
 import '../models/user.dart';
 import 'home_screen.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:otp/otp.dart';
 
 class QrLoginScreen extends StatefulWidget {
   final String qrCodeUrl;
