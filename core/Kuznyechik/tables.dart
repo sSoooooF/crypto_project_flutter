@@ -1,6 +1,3 @@
-// kuznechik_sbox.dart
-import 'dart:typed_data';
-
 /// S-Box (Pi) - Таблица нелинейной замены
 const List<int> KUZ_PI = [
   252, 238, 221, 17, 207, 110, 49, 22, 251, 196, 250, 218, 35, 197, 4, 77, 233, 119, 240, 219,
