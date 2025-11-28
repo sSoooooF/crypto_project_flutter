@@ -8,8 +8,8 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 
-env:
-  PUB_CACHE: ${{ runner.tool_cache }}/pub-cache
+# env:
+#   PUB_CACHE: ${{ runner.tool_cache }}/pub-cache
 
 jobs:
   analyze:
