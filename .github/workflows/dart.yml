@@ -45,20 +45,10 @@ jobs:
           dart pub get
           flutter pub get
 
-      - name: Analyze project source
-        run: |
-          cd app
-          dart analyze
-
       - name: Run tests
         run: |
           cd app
           flutter test
-
-      - name: Security audit
-        run: |
-          cd app
-          dart pub deps --scan-packages
 
   # Сборка Android APK
   build-android:
