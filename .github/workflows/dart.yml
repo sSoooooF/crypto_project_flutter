@@ -2,11 +2,11 @@ name: Flutter CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
 
 # env:
 #   PUB_CACHE: ${{ runner.tool_cache }}/pub-cache
@@ -14,7 +14,7 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,13 +22,13 @@ jobs:
       - name: Setup Dart SDK
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: '3.24.3'
+          sdk: "3.5.3"
 
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
+          flutter-version: "3.24.3"
+          channel: "stable"
 
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -69,7 +69,7 @@ jobs:
   build-android:
     needs: analyze
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,14 +77,14 @@ jobs:
       - name: Setup Java for Android
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: "zulu"
+          java-version: "17"
 
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
+          flutter-version: "3.24.3"
+          channel: "stable"
 
       - name: Cache Flutter dependencies
         uses: actions/cache@v3
@@ -127,7 +127,7 @@ jobs:
   build-windows:
     needs: analyze
     runs-on: windows-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -135,8 +135,8 @@ jobs:
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
+          flutter-version: "3.24.3"
+          channel: "stable"
           windows-desktop: true
 
       - name: Cache Flutter dependencies
@@ -172,7 +172,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -200,11 +200,11 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: |
             Автоматически созданный релиз Flutter приложения.
-            
+
             ## Содержимое релиза:
             - Android APK и App Bundle
             - Windows исполняемый файл
-            
+
             ## Изменения:
             Проверьте коммиты для подробностей об изменениях.
         env:
