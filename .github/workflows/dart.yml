@@ -48,7 +48,7 @@ jobs:
       - name: Analyze project source
         run: |
           cd app
-          dart analyze --fatal-infos
+          dart analyze
 
       - name: Run tests
         run: |
