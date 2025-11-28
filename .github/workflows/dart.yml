@@ -45,10 +45,26 @@ jobs:
           dart pub get
           flutter pub get
 
+      - name: Install dartdoc
+        run: |
+          dart pub global activate dartdoc
+
       - name: Run Kuznechik test
         run: |
           cd app
           dart test tests/kuznechik_test.dart
+
+      - name: Generate API documentation
+        run: |
+          cd app
+          dart pub global run dartdoc --no-include-source --output=../docs/api
+          
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/api/
+          retention-days: 30
 
   # Сборка Android APK
   build-android:
@@ -168,20 +184,34 @@ jobs:
           name: android-artifacts
           path: android/
 
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: windows/
+
+      - name: Download documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             android/*.apk
+            docs/api/**
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: |
             Автоматически созданный релиз Flutter приложения.
-
+            
             ## Содержимое релиза:
             - Android APK и App Bundle
             - Windows исполняемый файл
-
+            - API документация
+            
             ## Изменения:
             Проверьте коммиты для подробностей об изменениях.
         env:

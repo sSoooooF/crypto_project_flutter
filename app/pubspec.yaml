@@ -60,6 +60,8 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   test: ^1.25.0
+  dartdoc: ^6.2.2
+  markdown: ^7.1.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
