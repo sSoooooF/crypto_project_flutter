@@ -153,7 +153,7 @@ jobs:
 
   deploy:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-android, build-windows]
+    needs: [build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -168,19 +168,11 @@ jobs:
           name: android-artifacts
           path: android/
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts
-          path: windows/
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             android/*.apk
-            android/*.aab
-            windows/**/*.exe
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           body: |
