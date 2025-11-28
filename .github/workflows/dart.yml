@@ -45,6 +45,10 @@ jobs:
           dart pub get
           flutter pub get
 
+      - name: Install dartdoc
+        run: |
+          dart pub global activate dartdoc
+
       - name: Run Kuznechik test
         run: |
           cd app
@@ -53,7 +57,7 @@ jobs:
       - name: Generate API documentation
         run: |
           cd app
-          dartdoc --no-include-source --output=../docs/api
+          dart pub global run dartdoc --no-include-source --output=../docs/api
           
       - name: Upload documentation
         uses: actions/upload-artifact@v4
