@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import '../core/streebog/streebog.dart';
+import '../../core/streebog/streebog.dart';
 
 void main() {
   group('Streebog 512-bit', () {

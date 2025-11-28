@@ -45,6 +45,11 @@ jobs:
           dart pub get
           flutter pub get
 
+      - name: Run Kuznechik test
+        run: |
+          cd app
+          dart test tests/kuznechik_test.dart
+
   # Сборка Android APK
   build-android:
     needs: analyze
