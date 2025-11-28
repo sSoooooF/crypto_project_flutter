@@ -1,6 +1,8 @@
-# app
+# Crypto App
 
-A new Flutter project.
+**Версия: 1.0.1**
+
+Это Flutter приложение для криптографических операций с российскими алгоритмами.
 
 ## Getting Started
 
