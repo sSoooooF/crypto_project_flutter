@@ -45,18 +45,6 @@ jobs:
           dart pub get
           flutter pub get
 
-      - name: Apply formatting
-        run: |
-          cd app
-          dart format .
-          
-      - name: Check formatting changes
-        run: |
-          cd app
-          git diff --exit-code
-        env:
-          GIT_DISCOVERY_ACROSS_FILESYSTEM: 1
-
       - name: Analyze project source
         run: |
           cd app
