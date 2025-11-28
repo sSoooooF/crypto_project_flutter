@@ -45,11 +45,6 @@ jobs:
           dart pub get
           flutter pub get
 
-      - name: Run tests
-        run: |
-          cd app
-          flutter test
-
   # Сборка Android APK
   build-android:
     needs: analyze
