@@ -37,7 +37,9 @@ class _AdminScreenState extends State<AdminScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить пользователя "$username"?'),
+        content: Text(
+          'Вы уверены, что хотите удалить пользователя "$username"?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -70,9 +72,9 @@ class _AdminScreenState extends State<AdminScreen> {
         _loadData();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка удаления: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Ошибка удаления: $e')));
         }
       }
     }
@@ -147,8 +149,8 @@ class _AdminScreenState extends State<AdminScreen> {
                               backgroundColor: user.role == Role.admin
                                   ? Colors.red
                                   : user.role == Role.user
-                                      ? Colors.blue
-                                      : Colors.grey,
+                                  ? Colors.blue
+                                  : Colors.grey,
                               child: Text(
                                 user.username[0].toUpperCase(),
                                 style: const TextStyle(color: Colors.white),
@@ -156,12 +158,16 @@ class _AdminScreenState extends State<AdminScreen> {
                             ),
                             title: Text(
                               user.username,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Роль: ${user.role.toString().split('.').last}'),
+                                Text(
+                                  'Роль: ${user.role.toString().split('.').last}',
+                                ),
                                 if (user.totpSecret != null)
                                   const Text(
                                     'TOTP: ✓',
@@ -183,31 +189,6 @@ class _AdminScreenState extends State<AdminScreen> {
                         );
                       },
                     ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Зашифрованные тексты:',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              flex: 1,
-              child: ListView.builder(
-                itemCount: _encryptedTexts.length,
-                itemBuilder: (context, index) {
-                  final text = _encryptedTexts[index];
-                  return Card(
-                    child: ListTile(
-                      title: Text('Алгоритм: ${text['algorithm']}'),
-                      subtitle: Text('Пользователь: ${text['username']}'),
-                      trailing: Text(
-                        text['encryptedText'].substring(0, 20) + '...',
-                        style: const TextStyle(fontFamily: 'monospace'),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
           ],
         ),
